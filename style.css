@@ -1,0 +1,91 @@
+:root {
+    --digimon-blue: #004a98;
+    --bg-color: #f0f2f5;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    margin: 0;
+}
+
+.container {
+    background-color: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    max-width: 950px;
+    width: 100%;
+    border-top: 10px solid var(--digimon-blue);
+}
+
+h1 { color: var(--digimon-blue); text-align: center; text-transform: uppercase; margin-bottom: 10px; }
+p  { text-align: center; color: #666; margin-bottom: 25px; }
+
+.upload-section {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px dashed #cbd5e0;
+    text-align: center;
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+button {
+    background-color: var(--digimon-blue);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover    { opacity: 0.9; transform: translateY(-1px); }
+button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+.status-msg { text-align: center; margin: 15px 0; font-weight: bold; min-height: 24px; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th {
+    background-color: var(--digimon-blue);
+    color: white;
+    padding: 12px;
+    text-align: left;
+}
+td { padding: 12px; border-bottom: 1px solid #edf2f7; }
+
+/* Rank column */
+td:first-child { width: 60px; text-align: center; }
+th:first-child { text-align: center; }
+
+/* Win Points and OMW% columns */
+td:nth-child(3), th:nth-child(3),
+td:nth-child(4), th:nth-child(4) {
+    text-align: center;
+    width: 100px;
+}
+
+.player-info strong {
+    display: block;
+    color: var(--digimon-blue);
+    text-transform: uppercase;
+}
+
+.id-badge {
+    font-size: 0.85em;
+    color: #718096;
+    background: #edf2f7;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+}

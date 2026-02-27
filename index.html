@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Digimon TCG+ OCR - Mestrado</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Digimon TCG+ Placement OCR</h1>
+        <p>Suba os prints em sequência. O sistema ignora duplicatas e mantém o rank original.</p>
+
+        <div class="upload-section">
+            <input type="file" id="imageInput" accept="image/*" multiple>
+            <button id="btnProcessar" onclick="processarImagens()">Processar Print(s)</button>
+            <button onclick="limparTabela()" style="background-color:#666; margin-left:10px;">Limpar</button>
+            <button onclick="exportarCSV()" style="background-color:#2d7a2d; margin-left:10px;">Exportar CSV</button>
+        </div>
+
+        <div id="status" class="status-msg">Aguardando print...</div>
+
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Jogador (Nick / ID)</th>
+                    <th>Win Points</th>
+                    <th>OMW%</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
