@@ -2,7 +2,7 @@
 title: Digimon OCR API
 emoji: ⚡
 colorFrom: blue
-colorTo: cyan
+colorTo: indigo
 sdk: docker
 pinned: false
 short_description: OCR de ranking do Digimon TCG+ com FastAPI e Groq Vision
