@@ -3,8 +3,8 @@ import json
 import re
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
-from PIL import Image
+from google import genai
+from google.genai import types
 import io
 
 app = FastAPI()
@@ -16,8 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+MODEL  = "gemini-1.5-flash"
 
 PROMPT = """
 Analise esta imagem de ranking do aplicativo Digimon TCG (BANDAI).
@@ -50,10 +50,15 @@ def extract_json(text: str) -> dict:
 @app.post("/process")
 async def process_ocr(file: UploadFile = File(...)):
     contents = await file.read()
-    image    = Image.open(io.BytesIO(contents))
-
+    raw_text = ""
     try:
-        response = model.generate_content([PROMPT, image])
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=[
+                PROMPT,
+                types.Part.from_bytes(data=contents, mime_type=file.content_type or "image/jpeg")
+            ]
+        )
         raw_text = response.text
 
         data    = extract_json(raw_text)
@@ -74,16 +79,30 @@ async def process_ocr(file: UploadFile = File(...)):
         return {"players": result}
 
     except Exception as e:
-        return {"players": [], "error": str(e), "raw": response.text if 'response' in dir() else "sem resposta"}
+        return {"players": [], "error": str(e), "raw": raw_text or "sem resposta"}
 
 
-# Endpoint de debug — retorna o texto cru do Gemini
 @app.post("/debug")
 async def debug_ocr(file: UploadFile = File(...)):
     contents = await file.read()
-    image    = Image.open(io.BytesIO(contents))
     try:
-        response = model.generate_content([PROMPT, image])
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=[
+                PROMPT,
+                types.Part.from_bytes(data=contents, mime_type=file.content_type or "image/jpeg")
+            ]
+        )
         return {"raw": response.text}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/models")
+async def list_models():
+    """Lista modelos disponíveis para debug."""
+    try:
+        models = [m.name for m in client.models.list()]
+        return {"models": models}
     except Exception as e:
         return {"error": str(e)}
