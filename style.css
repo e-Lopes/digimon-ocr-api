@@ -17,25 +17,48 @@ body {
     padding: 30px;
     border-radius: 15px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    max-width: 950px;
+    max-width: 750px;
     width: 100%;
     border-top: 10px solid var(--digimon-blue);
 }
 
-h1 { color: var(--digimon-blue); text-align: center; text-transform: uppercase; margin-bottom: 10px; }
-p  { text-align: center; color: #666; margin-bottom: 25px; }
+h1 { color: var(--digimon-blue); text-align: center; text-transform: uppercase; margin-bottom: 8px; }
+p  { text-align: center; color: #666; margin-bottom: 20px; }
 
+/* Upload section */
 .upload-section {
     background: #f8f9fa;
     padding: 20px;
     border-radius: 10px;
     border: 2px dashed #cbd5e0;
-    text-align: center;
-    margin-bottom: 20px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-direction: column;
     align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.file-label {
+    background-color: var(--digimon-blue);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.file-label:hover { opacity: 0.9; }
+.file-label input { display: none; }
+
+.file-count {
+    font-size: 0.9em;
+    color: #666;
+}
+
+.btn-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
     justify-content: center;
 }
 
@@ -43,49 +66,42 @@ button {
     background-color: var(--digimon-blue);
     color: white;
     border: none;
-    padding: 12px 20px;
+    padding: 10px 18px;
     border-radius: 5px;
     font-weight: bold;
     cursor: pointer;
     transition: 0.2s;
 }
-
 button:hover    { opacity: 0.9; transform: translateY(-1px); }
-button:disabled { background-color: #ccc; cursor: not-allowed; }
+button:disabled { background-color: #ccc; cursor: not-allowed; transform: none; }
 
+.btn-secondary { background-color: #666; }
+.btn-success   { background-color: #2d7a2d; }
+
+/* Status */
 .status-msg { text-align: center; margin: 15px 0; font-weight: bold; min-height: 24px; }
 
+/* Table */
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 th {
     background-color: var(--digimon-blue);
     color: white;
     padding: 12px;
-    text-align: left;
-}
-td { padding: 12px; border-bottom: 1px solid #edf2f7; }
-
-/* Rank column */
-td:first-child { width: 60px; text-align: center; }
-th:first-child { text-align: center; }
-
-/* Win Points and OMW% columns */
-td:nth-child(3), th:nth-child(3),
-td:nth-child(4), th:nth-child(4) {
     text-align: center;
-    width: 100px;
 }
-
-.player-info strong {
-    display: block;
-    color: var(--digimon-blue);
-    text-transform: uppercase;
+td {
+    padding: 11px 12px;
+    border-bottom: 1px solid #edf2f7;
+    text-align: center;
 }
+tr:hover td { background-color: #f7faff; }
 
 .id-badge {
-    font-size: 0.85em;
-    color: #718096;
+    font-size: 0.9em;
+    color: #2d5a9e;
     background: #edf2f7;
-    padding: 2px 6px;
+    padding: 3px 8px;
     border-radius: 4px;
     font-family: monospace;
+    letter-spacing: 0.5px;
 }

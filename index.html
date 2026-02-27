@@ -8,13 +8,19 @@
 <body>
     <div class="container">
         <h1>Digimon TCG+ Placement OCR</h1>
-        <p>Suba os prints em sequência. Duplicatas são ignoradas automaticamente.</p>
+        <p>Suba os prints do ranking. Duplicatas são ignoradas automaticamente.</p>
 
         <div class="upload-section">
-            <input type="file" id="imageInput" accept="image/*" multiple>
-            <button id="btnProcessar" onclick="processarImagens()">Processar Print(s)</button>
-            <button onclick="limparTabela()" style="background-color:#666;">Limpar</button>
-            <button onclick="exportarCSV()" style="background-color:#2d7a2d;">Exportar CSV</button>
+            <label class="file-label">
+                📁 Escolher Print(s)
+                <input type="file" id="imageInput" accept="image/*" multiple>
+            </label>
+            <span id="fileCount" class="file-count">Nenhum arquivo selecionado</span>
+            <div class="btn-group">
+                <button id="btnProcessar" onclick="processarImagens()">▶ Processar</button>
+                <button onclick="limparTabela()" class="btn-secondary">✕ Limpar</button>
+                <button onclick="exportarCSV()" class="btn-success">↓ Exportar CSV</button>
+            </div>
         </div>
 
         <div id="status" class="status-msg">Aguardando print...</div>
