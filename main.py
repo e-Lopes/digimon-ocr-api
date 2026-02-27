@@ -14,156 +14,147 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Regex patterns
-# ---------------------------------------------------------------------------
-MEMBER_RE  = re.compile(r"(\d{10}|GUEST\d+)", re.IGNORECASE)
-RANK_RE    = re.compile(r"^\d{1,3}$")
-POINTS_RE  = re.compile(r"^\d{1,3}$")
-OMW_RE     = re.compile(r"(\d{1,3}[\.,]\d)%?")   # 66.6%  or  66,6
-
+MEMBER_RE = re.compile(r"(\d{10}|GUEST\d+)", re.IGNORECASE)
+OMW_RE    = re.compile(r"(\d{1,3}[.,]\d)%?")
 
 # ---------------------------------------------------------------------------
-# Image pre-processing helpers
+# Pre-processing
 # ---------------------------------------------------------------------------
-
-def _to_gray(img: np.ndarray) -> np.ndarray:
-    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-
-def _crop_content_area(gray: np.ndarray) -> np.ndarray:
-    """
-    Remove status bar (top ~8%) and bottom nav bar (bottom ~15%) that are
-    common in full-screen Android screenshots.  Uses a heuristic: if the
-    image is taller than it is wide (portrait phone screenshot) we crop.
-    """
-    h, w = gray.shape
-    if h > w:                        # portrait → likely a phone screenshot
-        top    = int(h * 0.08)       # skip status bar
-        bottom = int(h * 0.88)       # skip bottom nav  (keeps ~80 % of height)
-        return gray[top:bottom, :]
-    return gray
-
 
 def _preprocess(img: np.ndarray) -> np.ndarray:
-    gray = _to_gray(img)
-    gray = _crop_content_area(gray)
-    # Upscale for better OCR
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    orig_h, orig_w = gray.shape
+
+    crop_top    = 0
+    crop_bottom = orig_h
+
+    if orig_h > orig_w:
+        # Try to find dark header bar to set crop_top
+        top_search = gray[:int(orig_h * 0.50), :]
+        _, bw = cv2.threshold(top_search, 110, 255, cv2.THRESH_BINARY_INV)
+        row_darkness = bw.mean(axis=1)
+        dark_rows = np.where(row_darkness > 25)[0]
+        if len(dark_rows) > 0:
+            crop_top = max(0, int(dark_rows[0]) - 5)
+        else:
+            crop_top = int(orig_h * 0.12)
+
+        crop_bottom = int(orig_h * 0.87)
+
+    gray = gray[crop_top:crop_bottom, :]
     gray = cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-    # Mild denoise
     gray = cv2.medianBlur(gray, 3)
-    # Adaptive threshold makes text pop on any background colour
     gray = cv2.adaptiveThreshold(
         gray, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31, 10
+        cv2.THRESH_BINARY, 31, 10
     )
     return gray
 
 
-# ---------------------------------------------------------------------------
-# Token extraction via Tesseract
-# ---------------------------------------------------------------------------
-
-def _get_tokens(gray: np.ndarray) -> list[dict]:
-    """Return list of {text, x_pct, y_pct, w_pct, h_pct, conf}."""
-    cfg = r"--oem 3 --psm 6"
+def _get_tokens(gray: np.ndarray) -> list:
+    cfg  = r"--oem 3 --psm 6"
     data = pytesseract.image_to_data(gray, config=cfg, output_type=pytesseract.Output.DICT)
-    h_img, w_img = gray.shape
+    h, w = gray.shape
     tokens = []
     for i in range(len(data["text"])):
         text = data["text"][i].strip()
         conf = int(data["conf"][i])
-        if text and conf > 20:        # discard very low-confidence noise
+        if text and conf > 25:
             tokens.append({
                 "text":  text,
-                "x_pct": (data["left"][i] / w_img) * 100,
-                "y_pct": (data["top"][i] / h_img) * 100,
-                "w_pct": (data["width"][i] / w_img) * 100,
+                "x_pct": (data["left"][i] / w) * 100,
+                "y_pct": (data["top"][i]  / h) * 100,
                 "conf":  conf,
             })
     return tokens
 
 
 # ---------------------------------------------------------------------------
-# Parsing helpers
+# Field extractors
 # ---------------------------------------------------------------------------
 
-STOP_WORDS = re.compile(
-    r"\b(Member|Number|Ranking|User|Name|Win|Points|OMW|ng|Ranki)\b",
+def _near(tokens, y_ref, x_min=None, x_max=None, y_tol=2.8):
+    return sorted(
+        [t for t in tokens
+         if abs(t["y_pct"] - y_ref) < y_tol
+         and (x_min is None or t["x_pct"] >= x_min)
+         and (x_max is None or t["x_pct"] <= x_max)],
+        key=lambda t: t["x_pct"]
+    )
+
+
+STOP = re.compile(
+    r"\b(Member|Number|Ranking|Ranki|User|Name|Win|Points|OMW|ng)\b",
     re.IGNORECASE,
 )
 
-def _tokens_near_y(tokens, y_ref, x_min=None, x_max=None, y_tol=3.5):
-    result = [
-        t for t in tokens
-        if abs(t["y_pct"] - y_ref) < y_tol
-        and (x_min is None or t["x_pct"] >= x_min)
-        and (x_max is None or t["x_pct"] <= x_max)
-    ]
-    return sorted(result, key=lambda t: t["x_pct"])
+
+def _find_rank(tokens, y_ref):
+    """Leftmost column x < 14%, ±5% y."""
+    for t in sorted(_near(tokens, y_ref, x_max=14, y_tol=5.0),
+                    key=lambda t: abs(t["y_pct"] - y_ref)):
+        d = re.sub(r"[^\d]", "", t["text"])
+        if d and re.match(r"^\d{1,3}$", d):
+            return int(d)
+    return None
 
 
-def _build_name(tokens, y_ref, y_tol=4.0):
+def _find_name(tokens, y_ref):
     """
-    Name lives in the 2nd column (roughly x 15-75 %).
-    It appears on the SAME row as the rank badge or one row above the member id.
-    We search a small y window above y_ref (member-id row) and at y_ref itself.
+    Name row is typically 4-6% ABOVE the member-id row.
+    Search at y_ref-5 and y_ref, column x 12-70%.
+    Exclude any token that matches a member id or is a pure number.
     """
     candidates = [
         t for t in tokens
-        if 12 < t["x_pct"] < 78
-        and (abs(t["y_pct"] - y_ref) < y_tol or abs(t["y_pct"] - (y_ref - 4)) < y_tol)
+        if 12 < t["x_pct"] < 70
+        and (abs(t["y_pct"] - y_ref) < 2.5 or abs(t["y_pct"] - (y_ref - 5)) < 2.5)
+        and not MEMBER_RE.search(t["text"])
+        and not re.match(r"^\d+[.,]?\d*%?$", t["text"])
     ]
     candidates.sort(key=lambda t: t["x_pct"])
-    raw = " ".join(t["text"] for t in candidates)
-    clean = STOP_WORDS.sub("", raw)
-    # Remove digit-only tokens and stray %
-    clean = re.sub(r"\b\d+[\.,]?\d*%?\b", "", clean)
+    raw   = " ".join(t["text"] for t in candidates)
+    clean = STOP.sub("", raw)
     clean = re.sub(r"\s{2,}", " ", clean).strip()
     return clean or "Desconhecido"
 
 
-def _find_omw(tokens, y_ref, y_tol=4.0):
-    """OMW% column is roughly x > 70%."""
-    candidates = _tokens_near_y(tokens, y_ref, x_min=68, y_tol=y_tol)
-    for t in candidates:
-        m = OMW_RE.search(t["text"].replace(",", "."))
-        if m:
-            return m.group(1).replace(",", ".")
-    return ""
-
-
-def _find_points(tokens, y_ref, y_tol=4.0):
-    """Win Points column is roughly x 58-72%."""
-    candidates = _tokens_near_y(tokens, y_ref, x_min=52, x_max=72, y_tol=y_tol)
-    for t in candidates:
-        cleaned = re.sub(r"[^\d]", "", t["text"])
-        if cleaned and POINTS_RE.match(cleaned):
-            return cleaned
+def _find_points(tokens, y_ref):
+    """
+    Win Points: single integer 1-3 digits, column x 55-76%.
+    Takes the FIRST match (leftmost) to avoid grabbing OMW digits.
+    """
+    for t in _near(tokens, y_ref, x_min=55, x_max=76, y_tol=3.0):
+        d = re.sub(r"[^\d]", "", t["text"])
+        if d and re.match(r"^\d{1,3}$", d):
+            return d
     return "0"
 
 
-def _find_rank(tokens, y_ref, y_tol=4.5):
-    """Rank badge is in leftmost column, x < 15%."""
-    candidates = _tokens_near_y(tokens, y_ref, x_min=0, x_max=15, y_tol=y_tol)
-    for t in sorted(candidates, key=lambda t: abs(t["y_pct"] - y_ref)):
-        cleaned = re.sub(r"[^\d]", "", t["text"])
-        if cleaned and RANK_RE.match(cleaned):
-            return int(cleaned)
-    return None
+def _find_omw(tokens, y_ref):
+    """OMW%: pattern like 47.1 or 66,6%, column x > 70%."""
+    for t in _near(tokens, y_ref, x_min=70, y_tol=3.5):
+        m = OMW_RE.search(t["text"].replace(",", "."))
+        if m:
+            val = m.group(1).replace(",", ".")
+            try:
+                if 0 <= float(val) <= 100:
+                    return val
+            except ValueError:
+                pass
+    return ""
 
 
 # ---------------------------------------------------------------------------
-# Main parse function
+# Main parse
 # ---------------------------------------------------------------------------
 
-def parse_image(img: np.ndarray) -> list[dict]:
+def parse_image(img: np.ndarray) -> list:
     processed = _preprocess(img)
-    tokens = _get_tokens(processed)
+    tokens    = _get_tokens(processed)
 
-    players = []
+    players  = []
     seen_ids = set()
 
     for t in tokens:
@@ -171,7 +162,7 @@ def parse_image(img: np.ndarray) -> list[dict]:
         if not match:
             continue
 
-        m_id  = match.group(1)
+        m_id  = match.group(1).upper()
         y_ref = t["y_pct"]
 
         if m_id in seen_ids:
@@ -179,7 +170,7 @@ def parse_image(img: np.ndarray) -> list[dict]:
         seen_ids.add(m_id)
 
         rank   = _find_rank(tokens, y_ref)
-        name   = _build_name(tokens, y_ref)
+        name   = _find_name(tokens, y_ref)
         points = _find_points(tokens, y_ref)
         omw    = _find_omw(tokens, y_ref)
 
@@ -189,13 +180,11 @@ def parse_image(img: np.ndarray) -> list[dict]:
             "member_id": m_id,
             "points":    points,
             "omw":       omw,
-            "y":         y_ref,        # used for ordering, not returned to client
+            "y":         y_ref,
         })
 
-    # Sort by rank (if found) then by vertical position
     players.sort(key=lambda p: (p["rank"] if p["rank"] is not None else 9999, p["y"]))
 
-    # Remove internal key before returning
     for p in players:
         p.pop("y", None)
 
@@ -208,13 +197,9 @@ def parse_image(img: np.ndarray) -> list[dict]:
 
 @app.post("/process")
 async def process_ocr(file: UploadFile = File(...)):
-    """
-    Process a single screenshot and return the players found.
-    The frontend is responsible for merging multiple prints (dedup by member_id).
-    """
     contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    nparr    = np.frombuffer(contents, np.uint8)
+    img      = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     if img is None:
         return {"players": [], "error": "Não foi possível decodificar a imagem."}
