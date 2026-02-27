@@ -14,6 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Detecta IDs de 10 dígitos ou GUEST
 MEMBER_RE = re.compile(r"\b(\d{10}|GUEST\d{3,})\b", re.IGNORECASE)
 
 @app.post("/process")
@@ -23,7 +24,7 @@ async def process_ocr(file: UploadFile = File(...)):
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # Aumento de contraste para prints de celular
+    # Melhora a leitura em telas de celular
     gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
     data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
@@ -41,26 +42,26 @@ async def process_ocr(file: UploadFile = File(...)):
 
     players = []
     for t in tokens:
+        # Ignora textos no topo ou rodapé extremo (fora da tabela)
+        if t['y_pct'] < 15 or t['y_pct'] > 85:
+            continue
+
         match = MEMBER_RE.search(t['text'])
         if match:
             m_id = match.group(1)
             y_ref = t['y_pct']
             
-            # Busca o Nickname (ajustado para prints de celular)
-            nick_tokens = [nt for nt in tokens if 10 < nt['x_pct'] < 65 and abs(nt['y_pct'] - (y_ref - 2)) < 5]
+            # Captura o Nickname (tokens próximos ao ID horizontalmente)
+            nick_tokens = [nt for nt in tokens if 10 < nt['x_pct'] < 65 and abs(nt['y_pct'] - (y_ref - 2.2)) < 4]
             nick_tokens.sort(key=lambda x: x['x_pct'])
             
             raw_nick = " ".join([nt['text'] for nt in nick_tokens])
             
-            # LIMPEZA AGRESSIVA: Remove termos do sistema e nomes residuais
-            clean_nick = re.sub(r'\b(Member|Number|Ranking|User|Name|matheusdonizete|Edu|Carlos|Joao|Muller|Vinicius|Sem|Mesa)\b', '', raw_nick, flags=re.IGNORECASE).strip()
-            
-            # Se a limpeza apagar tudo, tenta recuperar o texto original sem o ID
-            if not clean_nick:
-                clean_nick = raw_nick.replace(m_id, "").strip()
+            # LIMPEZA: Remove termos fixos da interface que o OCR captura
+            clean_nick = re.sub(r'\b(Member|Number|Ranking|User|Name|Win|Points|OMW)\b', '', raw_nick, flags=re.IGNORECASE).strip()
 
-            # Busca pontos
-            pts_tokens = [pt for pt in tokens if pt['x_pct'] > 65 and abs(pt['y_pct'] - (y_ref)) < 5]
+            # Captura Pontos (coluna da direita)
+            pts_tokens = [pt for pt in tokens if pt['x_pct'] > 65 and abs(pt['y_pct'] - y_ref) < 5]
             pts = "".join(filter(str.isdigit, "".join([p['text'] for p in pts_tokens])))
 
             players.append({
@@ -70,5 +71,6 @@ async def process_ocr(file: UploadFile = File(...)):
                 "y": y_ref
             })
 
+    # Ordena por posição na tela antes de retornar
     players.sort(key=lambda p: p['y'])
     return {"players": players}
