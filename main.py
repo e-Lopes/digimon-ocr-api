@@ -36,15 +36,11 @@ Regras:
 """
 
 def extract_json(text: str) -> dict:
-    """Extrai JSON mesmo se o modelo retornar texto extra."""
     text = text.strip()
-    # Remove blocos de markdown se existirem
     text = re.sub(r"```(?:json)?", "", text).strip()
-    # Tenta parse direto
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # Tenta extrair o primeiro objeto JSON encontrado
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
             return json.loads(match.group())
@@ -58,14 +54,14 @@ async def process_ocr(file: UploadFile = File(...)):
 
     try:
         response = model.generate_content([PROMPT, image])
-        data     = extract_json(response.text)
-        players  = data.get("players", [])
+        raw_text = response.text
 
-        # Sanitiza e valida cada player
+        data    = extract_json(raw_text)
+        players = data.get("players", [])
+
         result = []
         for p in players:
             member_id = str(p.get("member_id", "")).strip()
-            # Valida: 10 dígitos ou GUEST+dígitos
             if not re.match(r"^\d{10}$|^GUEST\d+$", member_id, re.IGNORECASE):
                 continue
             result.append({
@@ -78,4 +74,16 @@ async def process_ocr(file: UploadFile = File(...)):
         return {"players": result}
 
     except Exception as e:
-        return {"players": [], "error": str(e)}
+        return {"players": [], "error": str(e), "raw": response.text if 'response' in dir() else "sem resposta"}
+
+
+# Endpoint de debug — retorna o texto cru do Gemini
+@app.post("/debug")
+async def debug_ocr(file: UploadFile = File(...)):
+    contents = await file.read()
+    image    = Image.open(io.BytesIO(contents))
+    try:
+        response = model.generate_content([PROMPT, image])
+        return {"raw": response.text}
+    except Exception as e:
+        return {"error": str(e)}
