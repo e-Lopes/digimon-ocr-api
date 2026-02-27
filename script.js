@@ -1,9 +1,7 @@
 const API_BASE_URL = "https://e-lopes-digimon-ocr-api.hf.space";
 
-// Map preserva ordem de inserção = ranking correto no merge
 let playersMap = new Map();
 
-// Atualiza contador de arquivos selecionados
 document.getElementById('imageInput').addEventListener('change', function () {
     const count = this.files.length;
     document.getElementById('fileCount').innerText =
@@ -41,17 +39,10 @@ async function processarImagens() {
                 signal: AbortSignal.timeout(120000)
             });
 
-            if (!response.ok) {
-                console.warn(`Erro HTTP ${response.status} em ${files[i].name}`);
-                continue;
-            }
+            if (!response.ok) continue;
 
             const data = await response.json();
-
-            if (data.error) {
-                console.warn("Erro da API:", data.error);
-                continue;
-            }
+            if (data.error) { console.warn("Erro da API:", data.error); continue; }
 
             (data.players || []).forEach(player => {
                 if (!playersMap.has(player.member_id)) {
@@ -96,6 +87,7 @@ function renderTabela() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${rank}º</strong></td>
+            <td class="player-name">${esc(player.name) || '—'}</td>
             <td><span class="id-badge">${esc(player.member_id)}</span></td>
             <td>${player.points ? esc(player.points) + ' pts' : '—'}</td>
             <td>${player.omw   ? esc(player.omw)    + '%'  : '—'}</td>
@@ -107,10 +99,10 @@ function renderTabela() {
 
 function exportarCSV() {
     if (playersMap.size === 0) { alert("Nenhum dado para exportar."); return; }
-    let csv = "Rank,Member ID,Win Points,OMW%\n";
+    let csv = "Rank,Nome,Member ID,Win Points,OMW%\n";
     let rank = 1;
     playersMap.forEach(p => {
-        csv += `${rank},${p.member_id},${p.points || ""},${p.omw || ""}\n`;
+        csv += `${rank},"${p.name || ""}",${p.member_id},${p.points || ""},${p.omw || ""}\n`;
         rank++;
     });
     const a = Object.assign(document.createElement("a"), {

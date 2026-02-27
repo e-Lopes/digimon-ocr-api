@@ -23,10 +23,11 @@ Analise esta imagem de ranking do aplicativo Digimon TCG (BANDAI).
 Extraia TODOS os jogadores visíveis na tabela e retorne SOMENTE um JSON válido, sem texto adicional, sem markdown, sem bloco de código.
 
 Formato esperado:
-{"players": [{"rank": 1, "member_id": "0000238403", "points": "12", "omw": "47.1"}, ...]}
+{"players": [{"rank": 1, "name": "Edu", "member_id": "0000238403", "points": "12", "omw": "47.1"}, ...]}
 
 Regras:
 - rank: número inteiro da posição (1, 2, 3...)
+- name: nome/nick do jogador exatamente como aparece na coluna User Name. Se não visível, use ""
 - member_id: exatamente 10 dígitos numéricos OU começa com GUEST seguido de dígitos
 - points: apenas o número inteiro de Win Points (ex: "12"). Se não visível, use ""
 - omw: apenas o número do OMW% sem o símbolo % (ex: "47.1" ou "37"). Se não visível, use ""
@@ -77,6 +78,7 @@ async def process_ocr(file: UploadFile = File(...)):
                 continue
             result.append({
                 "rank":      int(p.get("rank", 0)),
+                "name":      str(p.get("name", "")).strip(),
                 "member_id": member_id.upper(),
                 "points":    str(p.get("points", "")),
                 "omw":       str(p.get("omw", "")),

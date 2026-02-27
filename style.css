@@ -17,7 +17,7 @@ body {
     padding: 30px;
     border-radius: 15px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    max-width: 750px;
+    max-width: 950px;
     width: 100%;
     border-top: 10px solid var(--digimon-blue);
 }
@@ -25,7 +25,6 @@ body {
 h1 { color: var(--digimon-blue); text-align: center; text-transform: uppercase; margin-bottom: 8px; }
 p  { text-align: center; color: #666; margin-bottom: 20px; }
 
-/* Upload section */
 .upload-section {
     background: #f8f9fa;
     padding: 20px;
@@ -50,10 +49,7 @@ p  { text-align: center; color: #666; margin-bottom: 20px; }
 .file-label:hover { opacity: 0.9; }
 .file-label input { display: none; }
 
-.file-count {
-    font-size: 0.9em;
-    color: #666;
-}
+.file-count { font-size: 0.9em; color: #666; }
 
 .btn-group {
     display: flex;
@@ -74,14 +70,11 @@ button {
 }
 button:hover    { opacity: 0.9; transform: translateY(-1px); }
 button:disabled { background-color: #ccc; cursor: not-allowed; transform: none; }
+.btn-secondary  { background-color: #666; }
+.btn-success    { background-color: #2d7a2d; }
 
-.btn-secondary { background-color: #666; }
-.btn-success   { background-color: #2d7a2d; }
-
-/* Status */
 .status-msg { text-align: center; margin: 15px 0; font-weight: bold; min-height: 24px; }
 
-/* Table */
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 th {
     background-color: var(--digimon-blue);
@@ -95,6 +88,13 @@ td {
     text-align: center;
 }
 tr:hover td { background-color: #f7faff; }
+
+.player-name {
+    text-align: left;
+    font-weight: bold;
+    color: var(--digimon-blue);
+    text-transform: uppercase;
+}
 
 .id-badge {
     font-size: 0.9em;
