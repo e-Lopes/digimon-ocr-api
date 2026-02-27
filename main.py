@@ -15,7 +15,9 @@ app.add_middleware(
 )
 
 MEMBER_RE = re.compile(r"(\d{10}|GUEST\d+)", re.IGNORECASE)
-OMW_RE    = re.compile(r"(\d{1,3}[.,]\d)%?")
+
+# Aceita tanto 37% quanto 37.1% ou 66,6%
+OMW_RE = re.compile(r"(\d{1,3}(?:[.,]\d)?)%")
 
 # ---------------------------------------------------------------------------
 # Pre-processing
@@ -59,7 +61,7 @@ def _get_tokens(gray: np.ndarray) -> list:
     return tokens
 
 
-def _near(tokens, y_ref, x_min=None, x_max=None, y_tol=3.0):
+def _near(tokens, y_ref, x_min=None, x_max=None, y_tol=3.5):
     return sorted(
         [t for t in tokens
          if abs(t["y_pct"] - y_ref) < y_tol
@@ -70,8 +72,11 @@ def _near(tokens, y_ref, x_min=None, x_max=None, y_tol=3.0):
 
 
 def _find_points(tokens, y_ref):
-    """Win Points: 1-3 digit integer, column x 55-76%."""
-    for t in _near(tokens, y_ref, x_min=55, x_max=76, y_tol=3.0):
+    """
+    Win Points: inteiro 1-3 dígitos, coluna x 45-78%.
+    Faixa ampliada para capturar valores em diferentes layouts.
+    """
+    for t in _near(tokens, y_ref, x_min=45, x_max=78, y_tol=3.5):
         d = re.sub(r"[^\d]", "", t["text"])
         if d and re.match(r"^\d{1,3}$", d):
             return d
@@ -79,9 +84,14 @@ def _find_points(tokens, y_ref):
 
 
 def _find_omw(tokens, y_ref):
-    """OMW%: pattern like 47.1%, column x > 70%."""
-    for t in _near(tokens, y_ref, x_min=70, y_tol=3.5):
-        m = OMW_RE.search(t["text"].replace(",", "."))
+    """
+    OMW%: aceita 37% (sem decimal) e 66.6% (com decimal).
+    Coluna x > 62%, faixa ampliada.
+    """
+    for t in _near(tokens, y_ref, x_min=62, y_tol=3.5):
+        # Normaliza vírgula para ponto
+        text_norm = t["text"].replace(",", ".")
+        m = OMW_RE.search(text_norm)
         if m:
             val = m.group(1).replace(",", ".")
             try:
@@ -93,7 +103,7 @@ def _find_omw(tokens, y_ref):
 
 
 # ---------------------------------------------------------------------------
-# Main parse — prioridade: member_id > points > omw
+# Main parse
 # ---------------------------------------------------------------------------
 
 def parse_image(img: np.ndarray) -> list:
@@ -124,10 +134,8 @@ def parse_image(img: np.ndarray) -> list:
             "y":         y_ref,
         })
 
-    # Sort by vertical position = ranking order on screen
     players.sort(key=lambda p: p["y"])
 
-    # Rank = position in this sorted list (autopreenchido)
     for i, p in enumerate(players):
         p["rank"] = i + 1
         p.pop("y", None)
