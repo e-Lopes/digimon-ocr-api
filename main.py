@@ -1,11 +1,10 @@
 import os
 import json
 import re
+import base64
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
-from google.genai import types
-import io
+from groq import Groq
 
 app = FastAPI()
 
@@ -16,8 +15,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-MODEL  = "gemini-2.0-flash-lite"
+client = Groq(api_key=os.environ["GROQ_API_KEY"])
+MODEL  = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 PROMPT = """
 Analise esta imagem de ranking do aplicativo Digimon TCG (BANDAI).
@@ -49,17 +48,24 @@ def extract_json(text: str) -> dict:
 
 @app.post("/process")
 async def process_ocr(file: UploadFile = File(...)):
-    contents = await file.read()
-    raw_text = ""
+    contents  = await file.read()
+    b64_image = base64.b64encode(contents).decode("utf-8")
+    mime_type = file.content_type or "image/jpeg"
+    raw_text  = ""
+
     try:
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model=MODEL,
-            contents=[
-                PROMPT,
-                types.Part.from_bytes(data=contents, mime_type=file.content_type or "image/jpeg")
-            ]
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}}
+                ]
+            }],
+            max_tokens=1024,
         )
-        raw_text = response.text
+        raw_text = response.choices[0].message.content
 
         data    = extract_json(raw_text)
         players = data.get("players", [])
@@ -84,25 +90,21 @@ async def process_ocr(file: UploadFile = File(...)):
 
 @app.post("/debug")
 async def debug_ocr(file: UploadFile = File(...)):
-    contents = await file.read()
+    contents  = await file.read()
+    b64_image = base64.b64encode(contents).decode("utf-8")
+    mime_type = file.content_type or "image/jpeg"
     try:
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model=MODEL,
-            contents=[
-                PROMPT,
-                types.Part.from_bytes(data=contents, mime_type=file.content_type or "image/jpeg")
-            ]
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}}
+                ]
+            }],
+            max_tokens=1024,
         )
-        return {"raw": response.text}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/models")
-async def list_models():
-    """Lista modelos disponíveis para debug."""
-    try:
-        models = [m.name for m in client.models.list()]
-        return {"models": models}
+        return {"raw": response.choices[0].message.content}
     except Exception as e:
         return {"error": str(e)}
