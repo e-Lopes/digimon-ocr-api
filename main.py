@@ -33,7 +33,7 @@ Formato esperado:
 }
 
 Regras:
-- store_name: nome da loja do evento (ex: "Meruru Curitiba"). Se nao visivel, use ""
+- store_name: nome da loja em azul (link clicavel logo abaixo do titulo do evento), ex: "Meruru Curitiba". NUNCA retorne endereco (ex: "Parana Curitiba...", "Rua...", "Avenida...", "Loja ..."). Se nao visivel, use ""
 - tournament_datetime: texto completo da data/hora do evento (faixa vermelha). Se nao visivel, use ""
 - rank: numero inteiro da posicao (1, 2, 3...)
 - name: nome/nick do jogador exatamente como aparece na coluna User Name. Se nao visivel, use ""
@@ -42,6 +42,15 @@ Regras:
 - omw: apenas o numero do OMW% sem o simbolo % (ex: "47.1" ou "37"). Se nao visivel, use ""
 - Ignore cabecalhos, rodapes, status bar e navegacao do celular
 - Retorne SOMENTE o JSON
+"""
+
+STORE_NAME_PROMPT = """
+Analise a imagem do evento Digimon TCG e retorne SOMENTE o nome da loja em azul (link clicavel), sem JSON e sem texto extra.
+
+Regras:
+- Use APENAS o texto azul do nome da loja (ex: "Meruru Curitiba", "Gladiators TCG", "Taverna Game House", "tcgBR")
+- NUNCA retorne endereco (ex: "Parana Curitiba ...", "Rua ...", "Avenida ...", "Loja ...")
+- Se nao conseguir identificar, retorne vazio
 """
 
 
@@ -108,6 +117,30 @@ def normalize_event_date(raw: str) -> str:
     return ""
 
 
+def looks_like_address(text: str) -> bool:
+    value = str(text or "").strip().lower()
+    if not value:
+        return False
+    address_terms = [
+        "parana",
+        "paraná",
+        "curitiba",
+        "avenida",
+        "av ",
+        " av.",
+        "rua",
+        "alameda",
+        "travessa",
+        "loja",
+        "numero",
+        "nº",
+        "cep",
+    ]
+    has_term = any(term in value for term in address_terms)
+    has_digits = bool(re.search(r"\d{2,}", value))
+    return has_term and has_digits
+
+
 def get_client() -> Groq:
     global client
     api_key = os.getenv("GROQ_API_KEY", "").strip()
@@ -138,6 +171,31 @@ def run_vision_prompt(b64_image: str, mime_type: str) -> str:
     return response.choices[0].message.content
 
 
+def extract_store_name_only(b64_image: str, mime_type: str) -> str:
+    response = get_client().chat.completions.create(
+        model=MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": STORE_NAME_PROMPT},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{b64_image}"},
+                    },
+                ],
+            }
+        ],
+        max_tokens=80,
+    )
+    raw = str(response.choices[0].message.content or "").strip()
+    raw = re.sub(r"```(?:json)?", "", raw).strip().strip('"').strip("'")
+    raw = re.sub(r"\s+", " ", raw)
+    if looks_like_address(raw):
+        return ""
+    return raw
+
+
 @app.get("/health")
 async def healthcheck():
     return {
@@ -160,6 +218,10 @@ async def process_ocr(file: UploadFile = File(...)):
         data = extract_json(raw_text)
         players = data.get("players", [])
         store_name = str(data.get("store_name", "")).strip()
+        if not store_name or looks_like_address(store_name):
+            store_name = extract_store_name_only(
+                b64_image=b64_image, mime_type=mime_type
+            ).strip()
         tournament_datetime = str(data.get("tournament_datetime", "")).strip()
         tournament_date = normalize_event_date(tournament_datetime)
 
