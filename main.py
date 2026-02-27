@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
+client = None
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 PROMPT = """
@@ -108,6 +108,45 @@ def normalize_event_date(raw: str) -> str:
     return ""
 
 
+def get_client() -> Groq:
+    global client
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY nao configurada")
+    if client is None:
+        client = Groq(api_key=api_key)
+    return client
+
+
+def run_vision_prompt(b64_image: str, mime_type: str) -> str:
+    response = get_client().chat.completions.create(
+        model=MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": PROMPT},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{b64_image}"},
+                    },
+                ],
+            }
+        ],
+        max_tokens=1200,
+    )
+    return response.choices[0].message.content
+
+
+@app.get("/health")
+async def healthcheck():
+    return {
+        "status": "ok",
+        "model": MODEL,
+        "groq_api_key_configured": bool(os.getenv("GROQ_API_KEY", "").strip()),
+    }
+
+
 @app.post("/process")
 async def process_ocr(file: UploadFile = File(...)):
     contents = await file.read()
@@ -116,23 +155,7 @@ async def process_ocr(file: UploadFile = File(...)):
     raw_text = ""
 
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": PROMPT},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{mime_type};base64,{b64_image}"},
-                        },
-                    ],
-                }
-            ],
-            max_tokens=1200,
-        )
-        raw_text = response.choices[0].message.content
+        raw_text = run_vision_prompt(b64_image=b64_image, mime_type=mime_type)
 
         data = extract_json(raw_text)
         players = data.get("players", [])
@@ -183,22 +206,6 @@ async def debug_ocr(file: UploadFile = File(...)):
     b64_image = base64.b64encode(contents).decode("utf-8")
     mime_type = file.content_type or "image/jpeg"
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": PROMPT},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{mime_type};base64,{b64_image}"},
-                        },
-                    ],
-                }
-            ],
-            max_tokens=1200,
-        )
-        return {"raw": response.choices[0].message.content}
+        return {"raw": run_vision_prompt(b64_image=b64_image, mime_type=mime_type)}
     except Exception as e:
         return {"error": str(e)}

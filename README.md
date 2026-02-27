@@ -122,6 +122,20 @@ Em caso de erro:
 
 Retorna apenas o texto bruto do modelo (util para ajuste de prompt e depuracao).
 
+### `GET /health`
+
+Healthcheck para monitoramento do servico.
+
+Exemplo de resposta:
+
+```json
+{
+  "status": "ok",
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+  "groq_api_key_configured": true
+}
+```
+
 ## Deploy no Hugging Face Spaces
 
 Este repositorio ja esta pronto para Spaces com `sdk: docker`.
@@ -142,3 +156,10 @@ uvicorn main:app --host 0.0.0.0 --port 7860
 
 - OCR por LLM pode variar conforme qualidade do print (corte, blur, reflexo, zoom).
 - Se quiser usar a interface web localmente, ajuste `API_BASE_URL` em `script.js`.
+
+## Pronto para producao (checklist rapido)
+
+1. Configurar `GROQ_API_KEY` no Space.
+2. Confirmar endpoint `GET /health` retornando `status: ok`.
+3. No frontend, usar retry para primeira chamada (cold start).
+4. Monitorar logs de runtime para timeouts da chamada ao modelo.
