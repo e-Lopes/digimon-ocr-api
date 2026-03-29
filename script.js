@@ -1,4 +1,6 @@
-const API_BASE_URL = "https://e-lopes-digimon-ocr-api.hf.space";
+const API_BASE_URL = window.location.hostname === "localhost" || window.location.protocol === "file:"
+    ? "http://localhost:8000"
+    : "https://digimon-ocr-api.vercel.app";
 
 let playersMap = new Map();
 
